@@ -38,6 +38,12 @@ const styles = (theme: Theme) =>
       padding: theme.spacing(1),
       border: `1px solid ${theme.palette.grey[200]}`,
       borderRadius: 2
+    },
+    error: {
+      color: theme.palette.error.dark,
+      border: `1px solid ${theme.palette.error.dark}`,
+      borderRadius: 2,
+      padding: 4
     }
   });
 
@@ -59,9 +65,10 @@ interface Props extends WithStyles<typeof styles> {
 }
 
 interface State {
-  tag?: string;
-  branch?: string;
-  revision?: string;
+  tag: string;
+  branch: string;
+  revision: string;
+  error?: string;
   activeParametersGroup: "REVISION-BRANCH" | "TAG";
 }
 
@@ -82,6 +89,29 @@ class Repository extends Component<Props, State> {
     const { repository } = this.props;
     const { tag, branch, revision, activeParametersGroup } = this.state;
 
+    if (activeParametersGroup === "TAG" && tag.trim().length === 0) {
+      this.setState({
+        error: "Tag is required"
+      });
+
+      return;
+    }
+
+    if (
+      activeParametersGroup === "REVISION-BRANCH" &&
+      (branch.trim().length === 0 || revision.trim().length === 0)
+    ) {
+      this.setState({
+        error: "Branch and/or revision is required"
+      });
+
+      return;
+    }
+
+    this.setState({
+      error: undefined
+    });
+
     this.props.onTriggerWorkflow(repository, {
       tag: tag!,
       branch: branch!,
@@ -98,9 +128,23 @@ class Repository extends Component<Props, State> {
 
   handleInputChange(inputName: "revision" | "tag" | "branch") {
     return (e: ChangeEvent<HTMLInputElement>) => {
-      this.setState<"revision" | "tag" | "branch">({
-        [inputName]: e.currentTarget.value! as string
-      });
+      if (inputName === "revision") {
+        this.setState({
+          revision: e.currentTarget.value! as string
+        });
+      }
+
+      if (inputName === "tag") {
+        this.setState({
+          tag: e.currentTarget.value! as string
+        });
+      }
+
+      if (inputName === "branch") {
+        this.setState({
+          branch: e.currentTarget.value! as string
+        });
+      }
     };
   }
 
@@ -114,7 +158,7 @@ class Repository extends Component<Props, State> {
 
   render() {
     const { expanded, onToggle, classes, repository } = this.props;
-    const { tag, branch, revision, activeParametersGroup } = this.state;
+    const { tag, branch, revision, activeParametersGroup, error } = this.state;
     const { id, organisation, name } = repository;
 
     return (
@@ -142,7 +186,7 @@ class Repository extends Component<Props, State> {
                           checked={activeParametersGroup === "REVISION-BRANCH"}
                           onChange={this.onParametersSetChose}
                           value="REVISION-BRANCH"
-                          name="radio-button-demo"
+                          name="parameters-set"
                           inputProps={{ "aria-label": "a" }}
                         />
                       </Box>
@@ -151,13 +195,11 @@ class Repository extends Component<Props, State> {
                       <TextField
                         variant="outlined"
                         onChange={this.handleInputChange("revision")}
-                        onFocus={() => this.setParametersSet("REVISION-BRANCH")}
                         margin="dense"
                         fullWidth
                         id="revision"
                         label="revision"
                         name="revision"
-                        autoFocus
                         autoComplete="off"
                         value={revision}
                       />
@@ -165,12 +207,10 @@ class Repository extends Component<Props, State> {
                         variant="outlined"
                         margin="dense"
                         onChange={this.handleInputChange("branch")}
-                        onFocus={() => this.setParametersSet("REVISION-BRANCH")}
                         fullWidth
                         id="branch"
                         label="branch"
                         name="branch"
-                        autoFocus
                         autoComplete="off"
                         value={branch}
                       />
@@ -185,7 +225,7 @@ class Repository extends Component<Props, State> {
                           checked={activeParametersGroup === "TAG"}
                           onChange={this.onParametersSetChose}
                           value="TAG"
-                          name="radio-button-demo"
+                          name="parameters-set"
                           inputProps={{ "aria-label": "b" }}
                         />
                       </Box>
@@ -195,12 +235,10 @@ class Repository extends Component<Props, State> {
                         variant="outlined"
                         margin="dense"
                         onChange={this.handleInputChange("tag")}
-                        onFocus={() => this.setParametersSet("TAG")}
                         fullWidth
                         id="tag"
                         label="tag"
                         name="tag"
-                        autoFocus
                         autoComplete="off"
                         value={tag}
                       />
@@ -220,6 +258,11 @@ class Repository extends Component<Props, State> {
               </Grid>
             </Grid>
           </form>
+          {error && (
+            <Typography component="p" className={classes.error}>
+              {error}
+            </Typography>
+          )}
         </ExpansionPanelDetails>
       </ExpansionPanel>
     );
