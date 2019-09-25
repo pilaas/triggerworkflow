@@ -284,7 +284,7 @@ const Repositories = withStyles(repositoriesStyles)(
     onParametersSetChose = () => {};
 
     render() {
-      const { repositories, classes } = this.props;
+      const { repositories, classes, token } = this.props;
       const { expandedRepositoryId } = this.state;
 
       return (
@@ -292,6 +292,7 @@ const Repositories = withStyles(repositoriesStyles)(
           {repositories.map(({ id, name, organisation, vcsType }) => (
             <Repository
               key={id}
+              token={token}
               expanded={expandedRepositoryId === id}
               repository={{ id, name, organisation, vcsType }}
               onToggle={this.togglePanel}
@@ -495,7 +496,7 @@ class App extends Component<Props, State> {
 
     return (
       <>
-        <Container component="main" maxWidth="sm">
+        <Container component="main" maxWidth="md">
           <CssBaseline />
           <div className={classes.paper}>
             <Typography component="h1" variant="h5" className={classes.header}>
