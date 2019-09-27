@@ -7,8 +7,13 @@ import Radio from "@material-ui/core/Radio";
 import TextField from "@material-ui/core/TextField";
 import Button from "@material-ui/core/Button";
 import Grid from "@material-ui/core/Grid";
+import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Input from "@material-ui/core/Input";
 import Icon from "@material-ui/core/Icon";
+import Stepper from "@material-ui/core/Stepper";
+import Step from "@material-ui/core/Step";
+import StepLabel from "@material-ui/core/StepLabel";
+import StepContent from "@material-ui/core/StepContent";
 import GetAppIcon from "@material-ui/icons/GetApp";
 import Box from "@material-ui/core/Box";
 import Typography from "@material-ui/core/Typography";
@@ -43,7 +48,7 @@ const styles = (theme: Theme) =>
     parametersGroup: {
       marginBottom: theme.spacing(1),
       padding: theme.spacing(1),
-      border: `1px solid ${theme.palette.grey[200]}`,
+      // border: `1px solid ${theme.palette.grey[200]}`,
       borderRadius: 2,
       "&:last-child": {
         marginBottom: 0
@@ -74,6 +79,28 @@ const styles = (theme: Theme) =>
     },
     iconSmall: {
       fontSize: 20
+    },
+    description: {
+      marginBottom: theme.spacing(4)
+    },
+    dividerWrapper: {
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      color: theme.palette.grey[400]
+    },
+    divider: {
+      width: "1px",
+      flexGrow: 1,
+      background: theme.palette.grey[300],
+      marginTop: theme.spacing(2),
+      marginBottom: theme.spacing(2)
+    },
+    actions: {
+      marginTop: theme.spacing(4),
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center"
     }
   });
 
@@ -190,15 +217,6 @@ class Repository extends Component<Props, State> {
     this.setState({
       activeParametersGroup: parametersSet
     });
-
-    /*
-
-    id: string;
-    name: string;
-    organisation: string;
-    vcsType: string;
-
-    */
   };
 
   prepareCurl() {
@@ -240,118 +258,125 @@ class Repository extends Component<Props, State> {
           </Typography>
         </ExpansionPanelSummary>
         <ExpansionPanelDetails className={classes.panelDetails}>
-          <Grid container>
-            <Grid item xs={12}>
-              <Typography component="p"></Typography>
-            </Grid>
-          </Grid>
+          <Typography
+            variant="body1"
+            gutterBottom
+            className={classes.description}
+          >
+            To trigger workflow, you need to define revision, branch or tag.
+            <br />
+            Tag can't be used together with revision or branch.
+          </Typography>
           <form onSubmit={this.onTriggerWorkflow}>
-            <Grid container spacing={2} justify="space-between">
-              <Grid item xs={6}>
-                <div className={classes.parametersGroup}>
-                  <Grid container spacing={0} justify="space-between">
-                    <Grid item xs={2}>
-                      <Box height="100%" display="flex" alignItems="center">
-                        <Radio
-                          checked={activeParametersGroup === "REVISION-BRANCH"}
-                          onChange={this.onParametersSetChose}
-                          value="REVISION-BRANCH"
-                          name="parameters-set"
-                          inputProps={{ "aria-label": "a" }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={10}>
-                      <TextField
-                        variant="outlined"
-                        onChange={this.handleInputChange("revision")}
-                        margin="dense"
-                        fullWidth
-                        id="revision"
-                        label="revision"
-                        name="revision"
-                        autoComplete="off"
-                        disabled={pending}
-                        value={revision}
+            <Grid container spacing={1} justify="space-between">
+              <Grid item xs={5}>
+                <Box justifyContent="center" display="flex">
+                  <FormControlLabel
+                    control={
+                      <Radio
+                        name="parameters-set"
+                        value="REVISION-BRANCH"
+                        checked={activeParametersGroup === "REVISION-BRANCH"}
+                        onChange={this.onParametersSetChose}
                       />
-                      <TextField
-                        variant="outlined"
-                        margin="dense"
-                        onChange={this.handleInputChange("branch")}
-                        fullWidth
-                        id="branch"
-                        label="branch"
-                        name="branch"
-                        autoComplete="off"
-                        disabled={pending}
-                        value={branch}
-                      />
-                    </Grid>
-                  </Grid>
-                </div>
-                <div className={classes.parametersGroup}>
-                  <Grid container spacing={0} justify="space-between">
-                    <Grid item xs={2}>
-                      <Box height="100%" display="flex" alignItems="center">
-                        <Radio
-                          checked={activeParametersGroup === "TAG"}
-                          onChange={this.onParametersSetChose}
-                          value="TAG"
-                          name="parameters-set"
-                          inputProps={{ "aria-label": "b" }}
-                        />
-                      </Box>
-                    </Grid>
-                    <Grid item xs={10}>
-                      <TextField
-                        variant="outlined"
-                        margin="dense"
-                        onChange={this.handleInputChange("tag")}
-                        fullWidth
-                        id="tag"
-                        label="tag"
-                        name="tag"
-                        autoComplete="off"
-                        disabled={pending}
-                        value={tag}
-                      />
-                    </Grid>
-                  </Grid>
-                </div>
-              </Grid>
-              <Grid item xs={6} className={classes.triggerButtonWrapper}>
-                <div className={classes.curlWrapper}>
-                  <Input
-                    placeholder="curl"
-                    className={classes.curl}
-                    value={this.prepareCurl()}
-                    inputRef={this.curlRef}
-                    disableUnderline={true}
-                    readOnly
+                    }
+                    label="Revision and/or branch"
                   />
-                  <Button
-                    variant="contained"
-                    size="small"
-                    className={classes.curlButton}
-                    aria-label="Copy cURL to clipboard"
-                    title="Copy cURL to clipboard"
-                    onClick={this.copyCurlToClipboard}
-                  >
-                    <GetAppIcon className={classes.iconSmall} />
-                  </Button>
-                </div>
-                <Button
-                  type="submit"
+                </Box>
+                <TextField
+                  variant="outlined"
+                  onChange={this.handleInputChange("revision")}
+                  margin="dense"
                   fullWidth
-                  variant="contained"
-                  color="primary"
+                  id="revision"
+                  label="revision"
+                  name="revision"
+                  autoComplete="off"
                   disabled={pending}
-                  className={classes.triggerButton}
-                >
-                  {pending ? "Loading..." : "Trigger"}
-                </Button>
+                  value={revision}
+                />
+                <TextField
+                  variant="outlined"
+                  margin="dense"
+                  onChange={this.handleInputChange("branch")}
+                  fullWidth
+                  id="branch"
+                  label="branch"
+                  name="branch"
+                  autoComplete="off"
+                  disabled={pending}
+                  value={branch}
+                />
+              </Grid>
+              <Grid item xs={2} className={classes.dividerWrapper}>
+                <div className={classes.divider}></div>
+                <span>or</span>
+                <div className={classes.divider}></div>
+              </Grid>
+              <Grid item xs={5}>
+                <Box justifyContent="center" display="flex">
+                  <FormControlLabel
+                    control={
+                      <Radio
+                        value="TAG"
+                        name="parameters-set"
+                        checked={activeParametersGroup === "TAG"}
+                        onChange={this.onParametersSetChose}
+                      />
+                    }
+                    label="Tag"
+                  />
+                </Box>
+                <TextField
+                  variant="outlined"
+                  margin="dense"
+                  onChange={this.handleInputChange("tag")}
+                  fullWidth
+                  id="tag"
+                  label="tag"
+                  name="tag"
+                  autoComplete="off"
+                  disabled={pending}
+                  value={tag}
+                />
               </Grid>
             </Grid>
+            {/* <div className={classes.curlWrapper}>
+              <Input
+                placeholder="curl"
+                className={classes.curl}
+                value={this.prepareCurl()}
+                inputRef={this.curlRef}
+                disableUnderline={true}
+                readOnly
+              />
+              <Button
+                variant="contained"
+                size="small"
+                className={classes.curlButton}
+                aria-label="Copy cURL to clipboard"
+                title="Copy cURL to clipboard"
+                onClick={this.copyCurlToClipboard}
+              >
+                <GetAppIcon className={classes.iconSmall} />
+              </Button>
+            </div> */}
+            <div className={classes.actions}>
+              <Grid container justify="center">
+                <Grid item xs={6}>
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    color="primary"
+                    fullWidth
+                    disabled={pending}
+                    className={classes.triggerButton}
+                  >
+                    {pending ? "Loading..." : "Trigger"}
+                  </Button>
+                </Grid>
+              </Grid>
+            </div>
           </form>
           {error && (
             <Typography component="p" className={classes.error}>

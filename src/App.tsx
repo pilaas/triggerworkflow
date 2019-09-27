@@ -289,11 +289,12 @@ const Repositories = withStyles(repositoriesStyles)(
 
       return (
         <>
-          {repositories.map(({ id, name, organisation, vcsType }) => (
+          {repositories.map(({ id, name, organisation, vcsType }, index) => (
             <Repository
               key={id}
               token={token}
-              expanded={expandedRepositoryId === id}
+              // expanded={expandedRepositoryId === id}
+              expanded={index === 0}
               repository={{ id, name, organisation, vcsType }}
               onToggle={this.togglePanel}
               onTriggerWorkflow={this.triggerWorkflow}
