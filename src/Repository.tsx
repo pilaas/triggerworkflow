@@ -4,18 +4,17 @@ import { WithStyles } from "@material-ui/core";
 import ExpandMoreIcon from "@material-ui/icons/ExpandMore";
 import ExpansionPanel from "@material-ui/core/ExpansionPanel";
 import Radio from "@material-ui/core/Radio";
+import Link from "@material-ui/core/Link";
 import TextField from "@material-ui/core/TextField";
 import Button from "@material-ui/core/Button";
+import { red, green } from "@material-ui/core/colors";
 import Grid from "@material-ui/core/Grid";
+import SaveAltIcon from "@material-ui/icons/SaveAlt";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
-import Input from "@material-ui/core/Input";
-import Icon from "@material-ui/core/Icon";
-import Stepper from "@material-ui/core/Stepper";
-import Step from "@material-ui/core/Step";
-import StepLabel from "@material-ui/core/StepLabel";
-import StepContent from "@material-ui/core/StepContent";
-import GetAppIcon from "@material-ui/icons/GetApp";
+import OpenInNewIcon from "@material-ui/icons/OpenInNew";
+import Popover from "@material-ui/core/Popover";
 import Box from "@material-ui/core/Box";
+import FormHelperText from "@material-ui/core/FormHelperText";
 import Typography from "@material-ui/core/Typography";
 import ExpansionPanelDetails from "@material-ui/core/ExpansionPanelDetails";
 import ExpansionPanelSummary from "@material-ui/core/ExpansionPanelSummary";
@@ -42,7 +41,6 @@ const styles = (theme: Theme) =>
       justifyContent: "flex-end"
     },
     triggerButton: {
-      marginBottom: theme.spacing(1.5),
       height: "40px"
     },
     parametersGroup: {
@@ -68,8 +66,23 @@ const styles = (theme: Theme) =>
       alignItems: "center"
     },
     curlButton: {
-      "flex-shrink": 1,
-      minWidth: "auto"
+      textTransform: "none",
+      paddingLeft: theme.spacing(1),
+      paddingRight: theme.spacing(1),
+      marginTop: theme.spacing(2),
+      backgroundColor: theme.palette.grey[200]
+    },
+    curlInput: {
+      position: "absolute",
+      // left: "-10000px",
+      opacity: 0,
+      zIndex: -1,
+      pointerEvents: "none"
+      // overflow: "hidden"
+    },
+    curlIcon: {
+      fontSize: 20,
+      marginLeft: theme.spacing(1)
     },
     error: {
       color: theme.palette.error.dark,
@@ -101,6 +114,27 @@ const styles = (theme: Theme) =>
       display: "flex",
       flexDirection: "column",
       alignItems: "center"
+    },
+    resourceLink: {
+      marginBottom: theme.spacing(1),
+      fontSize: 12
+    },
+    buttonWrapper: {
+      position: "relative"
+    },
+    popover: {
+      padding: theme.spacing(1)
+    },
+    popoverSuccess: {
+      color: "white",
+      backgroundColor: green[600]
+    },
+    popoverError: {
+      color: "white",
+      backgroundColor: red[600],
+      "& a": {
+        color: "inherit"
+      }
     }
   });
 
@@ -116,23 +150,26 @@ interface Props extends WithStyles<typeof styles> {
   token: string;
   repository: RepositoryType;
   onToggle: (id: PropType<RepositoryType, "id">) => any;
-  onTriggerWorkflow: (
-    repository: RepositoryType,
-    parameters: { branch: string; tag: string; revision: string }
-  ) => any;
+  onTriggerWorkflow: (repository: RepositoryType, parameters: { branch: string; tag: string; revision: string }) => any;
 }
 
 interface State {
   tag: string;
   branch: string;
   revision: string;
+  tagError?: string;
+  branchRevisionError?: string;
   error?: string;
   pending: boolean;
+  clipboardPopoverVisible: boolean;
+  triggerPopoverVisible: boolean;
   activeParametersGroup: "REVISION-BRANCH" | "TAG";
 }
 
 class Repository extends Component<Props, State> {
-  curlRef = createRef<HTMLInputElement>();
+  curlInputRef = createRef<HTMLInputElement>();
+  curlButtonRef = createRef<HTMLButtonElement>();
+  triggerButtonRef = createRef<HTMLButtonElement>();
 
   constructor(props: Props) {
     super(props);
@@ -142,7 +179,9 @@ class Repository extends Component<Props, State> {
       tag: "",
       branch: "",
       revision: "",
-      pending: false
+      pending: false,
+      clipboardPopoverVisible: false,
+      triggerPopoverVisible: false
     };
   }
 
@@ -151,29 +190,39 @@ class Repository extends Component<Props, State> {
     const { repository } = this.props;
     const { tag, branch, revision, activeParametersGroup } = this.state;
 
+    this.setState({
+      error: undefined,
+      tagError: undefined,
+      branchRevisionError: undefined
+    });
+
     if (activeParametersGroup === "TAG" && tag.trim().length === 0) {
       this.setState({
-        error: "Tag is required"
+        tagError: "Tag is required"
       });
 
       return;
     }
 
-    if (
-      activeParametersGroup === "REVISION-BRANCH" &&
-      (branch.trim().length === 0 || revision.trim().length === 0)
-    ) {
+    if (activeParametersGroup === "REVISION-BRANCH" && branch.trim().length === 0 && revision.trim().length === 0) {
       this.setState({
-        error: "Branch and/or revision is required"
+        branchRevisionError: "Branch and/or revision is required"
       });
 
       return;
     }
 
     this.setState({
-      error: undefined,
       pending: true
     });
+
+    setTimeout(() => {
+      this.setState({
+        pending: false,
+        triggerPopoverVisible: true
+        // error: "Workflow was (<a href='https://www.onet.pl' target='_new'>probably</a>) not triggered"
+      });
+    }, 2000);
 
     // this.props.onTriggerWorkflow(repository, {
     //   tag: tag!,
@@ -183,10 +232,7 @@ class Repository extends Component<Props, State> {
   };
 
   onParametersSetChose = (e: ChangeEvent<HTMLInputElement>) => {
-    this.setParametersSet(e.currentTarget.value as PropType<
-      State,
-      "activeParametersGroup"
-    >);
+    this.setParametersSet(e.currentTarget.value as PropType<State, "activeParametersGroup">);
   };
 
   handleInputChange(inputName: "revision" | "tag" | "branch") {
@@ -211,9 +257,7 @@ class Repository extends Component<Props, State> {
     };
   }
 
-  setParametersSet = (
-    parametersSet: PropType<State, "activeParametersGroup">
-  ) => {
+  setParametersSet = (parametersSet: PropType<State, "activeParametersGroup">) => {
     this.setState({
       activeParametersGroup: parametersSet
     });
@@ -230,11 +274,26 @@ class Repository extends Component<Props, State> {
   }
 
   copyCurlToClipboard = () => {
-    if (this.curlRef.current) {
-      this.curlRef.current.select();
+    if (this.curlInputRef.current) {
+      this.curlInputRef.current.select();
       document.execCommand("copy");
-      this.curlRef.current.setSelectionRange(0, 0);
+
+      this.setState({
+        clipboardPopoverVisible: true
+      });
     }
+  };
+
+  onClipboardPopoverClose = () => {
+    this.setState({
+      clipboardPopoverVisible: false
+    });
+  };
+
+  onTriggerPopoverClose = () => {
+    this.setState({
+      triggerPopoverVisible: false
+    });
   };
 
   render() {
@@ -245,29 +304,51 @@ class Repository extends Component<Props, State> {
       revision,
       activeParametersGroup,
       error,
-      pending
+      pending,
+      clipboardPopoverVisible,
+      triggerPopoverVisible,
+      tagError,
+      branchRevisionError
     } = this.state;
-    const { id, organisation, name } = repository;
+    const { id, organisation, name, vcsType } = repository;
 
     return (
       <ExpansionPanel expanded={expanded} onChange={() => onToggle(id)}>
         <ExpansionPanelSummary expandIcon={<ExpandMoreIcon />}>
           <Typography className={classes.heading}>{name}</Typography>
-          <Typography className={classes.secondaryHeading}>
-            {organisation}
-          </Typography>
+          <Typography className={classes.secondaryHeading}>{organisation}</Typography>
         </ExpansionPanelSummary>
         <ExpansionPanelDetails className={classes.panelDetails}>
-          <Typography
-            variant="body1"
-            gutterBottom
-            className={classes.description}
-          >
-            To trigger workflow, you need to define revision, branch or tag.
-            <br />
-            Tag can't be used together with revision or branch.
-          </Typography>
-          <form onSubmit={this.onTriggerWorkflow}>
+          <Grid container>
+            <Grid item sm={8}>
+              <Typography variant="body1" gutterBottom className={classes.description}>
+                To trigger workflow, you need to define revision, branch or tag.
+                <br />
+                Tag can't be used together with revision or branch.
+                <br />
+              </Typography>
+            </Grid>
+            <Grid item sm={4}>
+              <Box display="flex" alignItems="flex-end" flexDirection="column">
+                <Link
+                  className={classes.resourceLink}
+                  href={`https://${vcsType ? "github.com" : "bitbucket.org"}/${organisation}/${name}`}
+                  target="_blank"
+                >
+                  Go to repository <OpenInNewIcon fontSize="inherit" />
+                </Link>
+                <Link
+                  className={classes.resourceLink}
+                  href={`https://circleci.com/${vcsType ? "gh" : "bb"}/${organisation}/${name}`}
+                  target="_blank"
+                >
+                  Go to CircleCI project <OpenInNewIcon fontSize="inherit" />
+                </Link>
+              </Box>
+            </Grid>
+          </Grid>
+
+          <form onSubmit={this.onTriggerWorkflow} autoComplete="off">
             <Grid container spacing={1} justify="space-between">
               <Grid item xs={5}>
                 <Box justifyContent="center" display="flex">
@@ -284,29 +365,36 @@ class Repository extends Component<Props, State> {
                   />
                 </Box>
                 <TextField
-                  variant="outlined"
-                  onChange={this.handleInputChange("revision")}
-                  margin="dense"
-                  fullWidth
-                  id="revision"
-                  label="revision"
-                  name="revision"
-                  autoComplete="off"
-                  disabled={pending}
-                  value={revision}
-                />
-                <TextField
+                  InputLabelProps={{
+                    shrink: true
+                  }}
                   variant="outlined"
                   margin="dense"
                   onChange={this.handleInputChange("branch")}
                   fullWidth
                   id="branch"
+                  placeholder="e.g. develop"
                   label="branch"
                   name="branch"
-                  autoComplete="off"
                   disabled={pending}
                   value={branch}
                 />
+                <TextField
+                  variant="outlined"
+                  onChange={this.handleInputChange("revision")}
+                  margin="dense"
+                  InputLabelProps={{
+                    shrink: true
+                  }}
+                  fullWidth
+                  id="revision"
+                  label="revision"
+                  placeholder="e.g. 13c5a2d689eea3803c267a"
+                  name="revision"
+                  disabled={pending}
+                  value={revision}
+                />
+                <FormHelperText error={true}>{branchRevisionError}</FormHelperText>
               </Grid>
               <Grid item xs={2} className={classes.dividerWrapper}>
                 <div className={classes.divider}></div>
@@ -334,11 +422,16 @@ class Repository extends Component<Props, State> {
                   fullWidth
                   id="tag"
                   label="tag"
+                  InputLabelProps={{
+                    shrink: true
+                  }}
+                  placeholder="e.g. v1.4.1"
                   name="tag"
                   autoComplete="off"
                   disabled={pending}
                   value={tag}
                 />
+                <FormHelperText error={true}>{tagError}</FormHelperText>
               </Grid>
             </Grid>
             {/* <div className={classes.curlWrapper}>
@@ -346,7 +439,7 @@ class Repository extends Component<Props, State> {
                 placeholder="curl"
                 className={classes.curl}
                 value={this.prepareCurl()}
-                inputRef={this.curlRef}
+                inputRef={this.curlInputRef}
                 disableUnderline={true}
                 readOnly
               />
@@ -363,26 +456,87 @@ class Repository extends Component<Props, State> {
             </div> */}
             <div className={classes.actions}>
               <Grid container justify="center">
-                <Grid item xs={6}>
-                  <Button
-                    type="submit"
-                    variant="contained"
-                    color="primary"
-                    fullWidth
-                    disabled={pending}
-                    className={classes.triggerButton}
-                  >
-                    {pending ? "Loading..." : "Trigger"}
-                  </Button>
+                <Grid item xs={4}>
+                  <Box display="flex" justifyContent="center" flexDirection="column" alignItems="center">
+                    <Popover
+                      open={triggerPopoverVisible}
+                      anchorEl={this.triggerButtonRef.current}
+                      onClose={this.onTriggerPopoverClose}
+                      anchorOrigin={{
+                        vertical: "bottom",
+                        horizontal: "center"
+                      }}
+                      transformOrigin={{
+                        vertical: "center",
+                        horizontal: "center"
+                      }}
+                    >
+                      {error ? (
+                        <Typography
+                          className={`${classes.popover} ${classes.popoverError}`}
+                          dangerouslySetInnerHTML={{ __html: error || "" }}
+                        ></Typography>
+                      ) : (
+                        <Typography className={`${classes.popover} ${classes.popoverSuccess}`}>
+                          Workflow triggered!
+                        </Typography>
+                      )}
+                    </Popover>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      color="primary"
+                      ref={this.triggerButtonRef}
+                      fullWidth
+                      disabled={pending}
+                      className={classes.triggerButton}
+                    >
+                      {pending ? "Loading..." : "Trigger"}
+                    </Button>
+                    <Popover
+                      open={clipboardPopoverVisible}
+                      anchorEl={this.curlButtonRef.current}
+                      onClose={this.onClipboardPopoverClose}
+                      anchorOrigin={{
+                        vertical: "bottom",
+                        horizontal: "center"
+                      }}
+                      transformOrigin={{
+                        vertical: "top",
+                        horizontal: "center"
+                      }}
+                    >
+                      <Typography className={classes.popover}>cURL copied to clipboard</Typography>
+                    </Popover>
+                    <Button
+                      size="small"
+                      type="button"
+                      variant="contained"
+                      className={classes.curlButton}
+                      ref={this.curlButtonRef}
+                      onClick={this.copyCurlToClipboard}
+                    >
+                      cURL
+                      <SaveAltIcon className={classes.curlIcon} />
+                    </Button>
+                    <input
+                      placeholder="curl"
+                      className={classes.curlInput}
+                      value={this.prepareCurl()}
+                      ref={this.curlInputRef}
+                      tabIndex={-1}
+                      readOnly
+                    />
+                  </Box>
                 </Grid>
               </Grid>
             </div>
           </form>
-          {error && (
+          {/* {error && (
             <Typography component="p" className={classes.error}>
               {error}
             </Typography>
-          )}
+          )} */}
         </ExpansionPanelDetails>
       </ExpansionPanel>
     );

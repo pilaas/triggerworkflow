@@ -5,11 +5,15 @@ import { WithStyles } from "@material-ui/core";
 import CircularProgress from "@material-ui/core/CircularProgress";
 import Switch from "@material-ui/core/Switch";
 import Typography from "@material-ui/core/Typography";
+import Grid from "@material-ui/core/Grid";
 import TextField from "@material-ui/core/TextField";
 import Button from "@material-ui/core/Button";
 import Snackbar from "@material-ui/core/Snackbar";
 import SnackbarContent from "@material-ui/core/SnackbarContent";
+import OpenInNewIcon from "@material-ui/icons/OpenInNew";
 import FormGroup from "@material-ui/core/FormGroup";
+import Link from "@material-ui/core/Link";
+import Box from "@material-ui/core/Box";
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import IconButton from "@material-ui/core/IconButton";
 import InfoIcon from "@material-ui/icons/Info";
@@ -32,15 +36,31 @@ const styles = (theme: Theme) =>
         backgroundColor: theme.palette.common.white
       }
     },
+    root: {
+      display: "flex",
+      flexDirection: "column",
+      minHeight: "100vh"
+    },
+    spinner: {
+      alignSelf: "center"
+    },
+    footer: {
+      padding: theme.spacing(2),
+      marginTop: "auto"
+    },
+    main: {
+      flex: "1 1"
+    },
     header: {
       marginBottom: theme.spacing(6),
-      position: "relative"
+      position: "relative",
+      alignSelf: "center"
     },
     paper: {
       marginTop: theme.spacing(4),
       display: "flex",
       flexDirection: "column",
-      alignItems: "center"
+      alignItems: "stretch"
     },
     form: {
       width: "100%", // Fix IE 11 issue.
@@ -217,19 +237,14 @@ const Repositories = withStyles(repositoriesStyles)(
       }));
     };
 
-    triggerWorkflow = (
-      repository: RepositoryType,
-      parameters: { branch: string; tag: string; revision: string }
-    ) => {
+    triggerWorkflow = (repository: RepositoryType, parameters: { branch: string; tag: string; revision: string }) => {
       console.log(repository, parameters);
       return;
 
       const { token, repositories } = this.props;
       const { expandedRepositoryId } = this.state;
 
-      const { name, vcsType, organisation } = repositories.find(
-        repository => repository.id === expandedRepositoryId
-      )!;
+      const { name, vcsType, organisation } = repositories.find(repository => repository.id === expandedRepositoryId)!;
 
       const { branch, tag, revision } = parameters;
 
@@ -248,17 +263,9 @@ const Repositories = withStyles(repositoriesStyles)(
         }
       ].filter(({ value }) => Boolean(value));
 
-      const queryString = parametersList
-        .map(({ type, value }) => `${type}=${value}`)
-        .join("&");
+      const queryString = parametersList.map(({ type, value }) => `${type}=${value}`).join("&");
 
-      const [cancel, promise] = triggerWorkflow(
-        vcsType,
-        organisation,
-        name,
-        token,
-        queryString
-      );
+      const [cancel, promise] = triggerWorkflow(vcsType, organisation, name, token, queryString);
 
       setTimeout(() => this.props.onClose(), 2000);
 
@@ -293,8 +300,7 @@ const Repositories = withStyles(repositoriesStyles)(
             <Repository
               key={id}
               token={token}
-              // expanded={expandedRepositoryId === id}
-              expanded={index === 0}
+              expanded={expandedRepositoryId === id}
               repository={{ id, name, organisation, vcsType }}
               onToggle={this.togglePanel}
               onTriggerWorkflow={this.triggerWorkflow}
@@ -415,7 +421,7 @@ class App extends Component<Props, State> {
   };
 
   renderLoader() {
-    return <CircularProgress />;
+    return <CircularProgress className={this.props.classes.spinner} />;
   }
 
   renderLogout() {
@@ -465,19 +471,12 @@ class App extends Component<Props, State> {
           aria-describedby="client-snackbar"
           message={
             <span id="client-snackbar" className={classes.errorMessage}>
-              <InfoIcon
-                className={`${classes.errorPopupIcon} ${classes.errorPopupIconVariant}`}
-              />
+              <InfoIcon className={`${classes.errorPopupIcon} ${classes.errorPopupIconVariant}`} />
               {this.state.error}
             </span>
           }
           action={[
-            <IconButton
-              key="close"
-              aria-label="close"
-              color="inherit"
-              onClick={this.onErrorClose}
-            >
+            <IconButton key="close" aria-label="close" color="inherit" onClick={this.onErrorClose}>
               <CloseIcon className={classes.errorPopupIcon} />
             </IconButton>
           ]}
@@ -488,16 +487,11 @@ class App extends Component<Props, State> {
 
   render() {
     const { classes } = this.props;
-    const {
-      repositories,
-      token,
-      rememberMe,
-      fetchingRepositories
-    } = this.state;
+    const { repositories, token, rememberMe, fetchingRepositories } = this.state;
 
     return (
-      <>
-        <Container component="main" maxWidth="md">
+      <div className={classes.root}>
+        <Container component="main" maxWidth="md" className={classes.main}>
           <CssBaseline />
           <div className={classes.paper}>
             <Typography component="h1" variant="h5" className={classes.header}>
@@ -505,54 +499,59 @@ class App extends Component<Props, State> {
               {repositories !== undefined && this.renderLogout()}
             </Typography>
             {token === undefined ? (
-              <form className={classes.form} onSubmit={this.onSubmit}>
-                <TextField
-                  variant="outlined"
-                  margin="normal"
-                  required
-                  fullWidth
-                  id="token"
-                  label="CircleCI token"
-                  name="token"
-                  autoFocus
-                  autoComplete="off"
-                />
-                <FormGroup>
-                  <FormControlLabel
-                    className={classes.rememberMe}
-                    control={
-                      <Switch
-                        size="small"
-                        checked={rememberMe}
-                        onChange={this.toggleRememberMe}
-                      />
-                    }
-                    label="Keep token in browser"
-                  />
-                </FormGroup>
-                <Button
-                  type="submit"
-                  fullWidth
-                  variant="contained"
-                  color="primary"
-                  className={classes.submit}
-                >
-                  Continue
-                </Button>
-              </form>
+              <Grid container justify="center">
+                <Grid item sm={6}>
+                  <form className={classes.form} onSubmit={this.onSubmit}>
+                    <TextField
+                      variant="outlined"
+                      margin="normal"
+                      required
+                      fullWidth
+                      id="token"
+                      label="CircleCI token"
+                      name="token"
+                      autoFocus
+                      autoComplete="off"
+                    />
+                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                      <FormGroup>
+                        <FormControlLabel
+                          className={classes.rememberMe}
+                          control={<Switch size="small" checked={rememberMe} onChange={this.toggleRememberMe} />}
+                          label="Keep token in browser"
+                        />
+                      </FormGroup>
+                      <Link href="https://circleci.com/account/api" target="_blank">
+                        Get token <OpenInNewIcon fontSize="inherit" />
+                      </Link>
+                    </Box>
+                    <Button type="submit" fullWidth variant="contained" color="primary" className={classes.submit}>
+                      Fetch projects
+                    </Button>
+                  </form>
+                </Grid>
+              </Grid>
             ) : null}
             {fetchingRepositories && this.renderLoader()}
             {repositories !== undefined ? (
-              <Repositories
-                token={token!}
-                repositories={repositories}
-                onClose={this.onClose}
-              />
+              <Repositories token={token!} repositories={repositories} onClose={this.onClose} />
             ) : null}
           </div>
         </Container>
         {this.renderError()}
-      </>
+        <footer className={classes.footer}>
+          <Container maxWidth="sm">
+            <Typography variant="body1">
+              <a href="/about" target="_new">
+                about
+              </a>
+              <a href="https://twitter.com/MariuszPilarczy" target="_new">
+                author
+              </a>
+            </Typography>
+          </Container>
+        </footer>
+      </div>
     );
   }
 }
