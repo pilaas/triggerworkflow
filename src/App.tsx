@@ -20,14 +20,8 @@ import InfoIcon from "@material-ui/icons/Info";
 import CloseIcon from "@material-ui/icons/Close";
 import Container from "@material-ui/core/Container";
 
-import Repository from "./Repository";
-
-interface RepositoryType {
-  id: string;
-  name: string;
-  organisation: string;
-  vcsType: string;
-}
+import Repositories from "./Repositories";
+import About from "./About";
 
 const styles = (theme: Theme) =>
   createStyles({
@@ -94,6 +88,7 @@ const styles = (theme: Theme) =>
   });
 
 interface Props extends WithStyles<typeof styles> {}
+
 interface State {
   repositories?: {
     id: string;
@@ -101,6 +96,7 @@ interface State {
     organisation: string;
     vcsType: string;
   }[];
+  page: "LOGIN" | "REPOSITORIES" | "ABOUT";
   error?: string;
   showError: boolean;
   rememberMe: boolean;
@@ -112,206 +108,6 @@ interface FormElements extends HTMLFormControlsCollection {
   token: HTMLInputElement;
 }
 
-const repositoriesStyles = (theme: Theme) =>
-  createStyles({
-    root: {
-      width: "100%"
-    },
-    heading: {
-      fontSize: theme.typography.pxToRem(15),
-      flexBasis: "70%",
-      flexShrink: 0
-    },
-    secondaryHeading: {
-      fontSize: theme.typography.pxToRem(15),
-      color: theme.palette.text.secondary
-    },
-    panelDetails: {
-      flexDirection: "column"
-    },
-    triggerButtonWrapper: {
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "center"
-    },
-    parametersGroup: {
-      marginBottom: theme.spacing(1),
-      padding: theme.spacing(1),
-      border: `1px solid ${theme.palette.grey[200]}`,
-      borderRadius: 2
-    }
-  });
-
-interface TriggerFormElements extends HTMLFormControlsCollection {
-  revision: HTMLInputElement;
-  tag: HTMLInputElement;
-  branch: HTMLInputElement;
-}
-
-interface RepositoriesProps extends WithStyles<typeof repositoriesStyles> {
-  repositories: RepositoryType[];
-  token: string;
-  onClose: () => void;
-}
-
-interface RepositoriesState {
-  expandedRepositoryId: string | undefined;
-}
-
-const triggerWorkflow = function(
-  vcsType: string,
-  organisation: string,
-  name: string,
-  token: string,
-  queryString: string
-): [() => void, Promise<void>] {
-  let canceled = false;
-  let cancel = () => {
-    console.log("canceled called");
-    canceled = true;
-  };
-
-  const generator = function*() {
-    yield fetch(
-      `https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}/build?circle-token=${token}&=${queryString}`,
-      {
-        method: "POST",
-        mode: "no-cors"
-      }
-    );
-
-    performance.mark("A");
-
-    const array = new Array(1024 * 10000).fill(0).map((item, index) => true);
-
-    performance.mark("B");
-
-    performance.measure("C", "A", "B");
-
-    let tries = 5;
-
-    while (tries > 0) {
-      const builds = yield fetch(
-        `https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}?circle-token=${token}&limit=1`
-      );
-
-      yield new Promise(resolve => setTimeout(resolve, 1000));
-
-      tries--;
-    }
-  };
-
-  const promise = new Promise<void>(async (resolve, reject) => {
-    const iterator = generator();
-    let resumeValue;
-
-    while (true) {
-      const next = iterator.next(resumeValue);
-
-      if (next.done) {
-        return resolve();
-      }
-
-      resumeValue = await next.value;
-
-      if (canceled) {
-        return;
-      }
-    }
-  });
-
-  return [cancel, promise];
-};
-
-const Repositories = withStyles(repositoriesStyles)(
-  class extends Component<RepositoriesProps, RepositoriesState> {
-    state: RepositoriesState = {
-      expandedRepositoryId: undefined
-    };
-
-    cancelHandlers = new Set<() => void>();
-
-    togglePanel = (id: string) => {
-      this.setState(({ expandedRepositoryId }) => ({
-        expandedRepositoryId: expandedRepositoryId === id ? undefined : id
-      }));
-    };
-
-    triggerWorkflow = (repository: RepositoryType, parameters: { branch: string; tag: string; revision: string }) => {
-      console.log(repository, parameters);
-      return;
-
-      const { token, repositories } = this.props;
-      const { expandedRepositoryId } = this.state;
-
-      const { name, vcsType, organisation } = repositories.find(repository => repository.id === expandedRepositoryId)!;
-
-      const { branch, tag, revision } = parameters;
-
-      const parametersList = [
-        {
-          type: "branch",
-          value: branch
-        },
-        {
-          type: "tag",
-          value: tag
-        },
-        {
-          type: "revision",
-          value: revision
-        }
-      ].filter(({ value }) => Boolean(value));
-
-      const queryString = parametersList.map(({ type, value }) => `${type}=${value}`).join("&");
-
-      const [cancel, promise] = triggerWorkflow(vcsType, organisation, name, token, queryString);
-
-      setTimeout(() => this.props.onClose(), 2000);
-
-      this.cancelHandlers.add(cancel);
-
-      promise
-        .then(() => {
-          console.log("done");
-        })
-        .catch(() => {
-          console.log("catch");
-        })
-        .finally(() => {
-          console.log("finally");
-          this.cancelHandlers.delete(cancel);
-        });
-    };
-
-    componentWillUnmount() {
-      this.cancelHandlers.forEach(cancel => cancel());
-    }
-
-    onParametersSetChose = () => {};
-
-    render() {
-      const { repositories, classes, token } = this.props;
-      const { expandedRepositoryId } = this.state;
-
-      return (
-        <>
-          {repositories.map(({ id, name, organisation, vcsType }, index) => (
-            <Repository
-              key={id}
-              token={token}
-              expanded={expandedRepositoryId === id}
-              repository={{ id, name, organisation, vcsType }}
-              onToggle={this.togglePanel}
-              onTriggerWorkflow={this.triggerWorkflow}
-            />
-          ))}
-        </>
-      );
-    }
-  }
-);
-
 class App extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -319,6 +115,7 @@ class App extends Component<Props, State> {
     const token = localStorage.getItem("circleci-token");
 
     this.state = {
+      page: token ? "REPOSITORIES" : "LOGIN",
       repositories: undefined,
       token: token === null ? undefined : token,
       rememberMe: false,
@@ -405,12 +202,6 @@ class App extends Component<Props, State> {
     }));
   };
 
-  onClose = () => {
-    this.setState({
-      repositories: undefined
-    });
-  };
-
   onLogout = () => {
     this.setState({
       repositories: undefined,
@@ -485,9 +276,19 @@ class App extends Component<Props, State> {
     );
   }
 
+  renderAbout() {
+    return <About />;
+  }
+
+  showAbout = () => {
+    this.setState({
+      page: "ABOUT"
+    });
+  };
+
   render() {
     const { classes } = this.props;
-    const { repositories, token, rememberMe, fetchingRepositories } = this.state;
+    const { repositories, token, rememberMe, fetchingRepositories, page } = this.state;
 
     return (
       <div className={classes.root}>
@@ -496,9 +297,9 @@ class App extends Component<Props, State> {
           <div className={classes.paper}>
             <Typography component="h1" variant="h5" className={classes.header}>
               Trigger workflow
-              {repositories !== undefined && this.renderLogout()}
+              {page === "REPOSITORIES" && this.renderLogout()}
             </Typography>
-            {token === undefined ? (
+            {page === "LOGIN" ? (
               <Grid container justify="center">
                 <Grid item sm={6}>
                   <form className={classes.form} onSubmit={this.onSubmit}>
@@ -532,17 +333,19 @@ class App extends Component<Props, State> {
                 </Grid>
               </Grid>
             ) : null}
-            {fetchingRepositories && this.renderLoader()}
-            {repositories !== undefined ? (
-              <Repositories token={token!} repositories={repositories} onClose={this.onClose} />
-            ) : null}
+            {page === "REPOSITORIES"
+              ? fetchingRepositories
+                ? this.renderLoader()
+                : repositories !== undefined && <Repositories token={token!} repositories={repositories} />
+              : null}
+            {page === "ABOUT" ? this.renderAbout() : null}
           </div>
         </Container>
         {this.renderError()}
         <footer className={classes.footer}>
           <Container maxWidth="sm">
             <Typography variant="body1">
-              <a href="/about" target="_new">
+              <a href="#" onClick={this.showAbout}>
                 about
               </a>
               <a href="https://twitter.com/MariuszPilarczy" target="_new">

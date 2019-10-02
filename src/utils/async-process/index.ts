@@ -1,3 +1,5 @@
+export const CANCELLED = Symbol("cancelled");
+
 function asyncProcess(generator: Function): [Promise<any>, () => void] {
   let cancelled = false;
 
@@ -8,16 +10,16 @@ function asyncProcess(generator: Function): [Promise<any>, () => void] {
   const promise = new Promise(async (resolve, reject) => {
     try {
       const iterator = generator();
+      let result;
 
       while (true) {
-        const { value, done } = iterator.next();
+        const { value, done }: { value: any; done: any } = iterator.next(result);
 
-        await value;
+        result = await value;
 
         if (cancelled) {
-          const result = "cancelled";
-          reject(result);
-          iterator.throw(result);
+          reject(CANCELLED);
+          iterator.throw(CANCELLED);
 
           return;
         }
@@ -29,8 +31,8 @@ function asyncProcess(generator: Function): [Promise<any>, () => void] {
         }
       }
     } catch (e) {
-      if (e !== "cancelled") {
-        throw e;
+      if (e !== CANCELLED) {
+        reject(e);
       }
     }
   });

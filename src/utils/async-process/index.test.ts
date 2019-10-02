@@ -1,4 +1,4 @@
-import asyncProcess from ".";
+import asyncProcess, { CANCELLED } from ".";
 
 it("resolves with process' returned value", async () => {
   function* process() {
@@ -35,6 +35,6 @@ it("stops process when cancel called", async () => {
 
   setTimeout(cancel, 500);
 
-  await expect(result).rejects.toEqual("cancelled");
+  await expect(result).rejects.toEqual(CANCELLED);
   await expect(processStep).not.toHaveBeenCalled();
 });

@@ -19,7 +19,36 @@ import Typography from "@material-ui/core/Typography";
 import ExpansionPanelDetails from "@material-ui/core/ExpansionPanelDetails";
 import ExpansionPanelSummary from "@material-ui/core/ExpansionPanelSummary";
 
+import asyncProcess from "./utils/async-process";
+
 type PropType<TObj, TProp extends keyof TObj> = TObj[TProp];
+
+function* triggerWorkflow(
+  repository: RepositoryType,
+  token: string,
+  data: { tag?: string; branch?: string; revision?: string }
+) {
+  const { vcsType, organisation, name } = repository;
+
+  const response = yield fetch(
+    `${process.env.REACT_APP_PROXY_URL}https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}/build?circle-token=${token}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(data)
+    }
+  );
+
+  if (response.ok) {
+    return true;
+  }
+
+  const body = yield response.json();
+
+  throw new Error(body.message);
+}
 
 const styles = (theme: Theme) =>
   createStyles({
@@ -46,7 +75,6 @@ const styles = (theme: Theme) =>
     parametersGroup: {
       marginBottom: theme.spacing(1),
       padding: theme.spacing(1),
-      // border: `1px solid ${theme.palette.grey[200]}`,
       borderRadius: 2,
       "&:last-child": {
         marginBottom: 0
@@ -74,11 +102,9 @@ const styles = (theme: Theme) =>
     },
     curlInput: {
       position: "absolute",
-      // left: "-10000px",
       opacity: 0,
       zIndex: -1,
       pointerEvents: "none"
-      // overflow: "hidden"
     },
     curlIcon: {
       fontSize: 20,
@@ -150,7 +176,6 @@ interface Props extends WithStyles<typeof styles> {
   token: string;
   repository: RepositoryType;
   onToggle: (id: PropType<RepositoryType, "id">) => any;
-  onTriggerWorkflow: (repository: RepositoryType, parameters: { branch: string; tag: string; revision: string }) => any;
 }
 
 interface State {
@@ -170,6 +195,7 @@ class Repository extends Component<Props, State> {
   curlInputRef = createRef<HTMLInputElement>();
   curlButtonRef = createRef<HTMLButtonElement>();
   triggerButtonRef = createRef<HTMLButtonElement>();
+  cancelRequest?: () => void = undefined;
 
   constructor(props: Props) {
     super(props);
@@ -185,9 +211,52 @@ class Repository extends Component<Props, State> {
     };
   }
 
+  componentWillUnmount() {
+    if (this.cancelRequest) {
+      this.cancelRequest();
+    }
+  }
+
+  triggerWorkflow() {
+    const { repository, token } = this.props;
+    let { tag, branch, revision, activeParametersGroup } = this.state;
+
+    const [promise, cancel] = asyncProcess(
+      triggerWorkflow.bind(
+        null,
+        repository,
+        token,
+        activeParametersGroup === "REVISION-BRANCH"
+          ? {
+              branch: branch || undefined,
+              revision: revision || undefined
+            }
+          : {
+              tag
+            }
+      )
+    );
+
+    this.cancelRequest = cancel;
+
+    promise
+      .catch(error => {
+        this.setState({
+          error: error.message
+        });
+      })
+      .finally(() => {
+        this.cancelRequest = undefined;
+
+        this.setState({
+          pending: false,
+          triggerPopoverVisible: true
+        });
+      });
+  }
+
   onTriggerWorkflow = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const { repository } = this.props;
     const { tag, branch, revision, activeParametersGroup } = this.state;
 
     this.setState({
@@ -216,19 +285,7 @@ class Repository extends Component<Props, State> {
       pending: true
     });
 
-    setTimeout(() => {
-      this.setState({
-        pending: false,
-        triggerPopoverVisible: true
-        // error: "Workflow was (<a href='https://www.onet.pl' target='_new'>probably</a>) not triggered"
-      });
-    }, 2000);
-
-    // this.props.onTriggerWorkflow(repository, {
-    //   tag: tag!,
-    //   branch: branch!,
-    //   revision: revision!
-    // });
+    this.triggerWorkflow();
   };
 
   onParametersSetChose = (e: ChangeEvent<HTMLInputElement>) => {
@@ -347,7 +404,6 @@ class Repository extends Component<Props, State> {
               </Box>
             </Grid>
           </Grid>
-
           <form onSubmit={this.onTriggerWorkflow} autoComplete="off">
             <Grid container spacing={1} justify="space-between">
               <Grid item xs={5}>
@@ -434,26 +490,6 @@ class Repository extends Component<Props, State> {
                 <FormHelperText error={true}>{tagError}</FormHelperText>
               </Grid>
             </Grid>
-            {/* <div className={classes.curlWrapper}>
-              <Input
-                placeholder="curl"
-                className={classes.curl}
-                value={this.prepareCurl()}
-                inputRef={this.curlInputRef}
-                disableUnderline={true}
-                readOnly
-              />
-              <Button
-                variant="contained"
-                size="small"
-                className={classes.curlButton}
-                aria-label="Copy cURL to clipboard"
-                title="Copy cURL to clipboard"
-                onClick={this.copyCurlToClipboard}
-              >
-                <GetAppIcon className={classes.iconSmall} />
-              </Button>
-            </div> */}
             <div className={classes.actions}>
               <Grid container justify="center">
                 <Grid item xs={4}>
@@ -532,11 +568,6 @@ class Repository extends Component<Props, State> {
               </Grid>
             </div>
           </form>
-          {/* {error && (
-            <Typography component="p" className={classes.error}>
-              {error}
-            </Typography>
-          )} */}
         </ExpansionPanelDetails>
       </ExpansionPanel>
     );
