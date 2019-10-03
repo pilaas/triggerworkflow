@@ -23,15 +23,28 @@ import asyncProcess from "./utils/async-process";
 
 type PropType<TObj, TProp extends keyof TObj> = TObj[TProp];
 
+type ActiveParametersGroupType = "REVISION-BRANCH" | "TAG";
+
+type RepositoryType = {
+  id: string;
+  name: string;
+  organisation: string;
+  vcsType: string;
+};
+
+type FormDataType = {
+  tag: string;
+  branch: string;
+  revision: string;
+};
+
 function* triggerWorkflow(
   repository: RepositoryType,
   token: string,
-  data: { tag?: string; branch?: string; revision?: string }
+  data: object
 ) {
-  const { vcsType, organisation, name } = repository;
-
   const response = yield fetch(
-    `${process.env.REACT_APP_PROXY_URL}https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}/build?circle-token=${token}`,
+    process.env.REACT_APP_PROXY_URL + prepareRequestUrl(repository, token),
     {
       method: "POST",
       headers: {
@@ -48,6 +61,28 @@ function* triggerWorkflow(
   const body = yield response.json();
 
   throw new Error(body.message);
+}
+
+function prepareRequestUrl(repository: RepositoryType, token: string) {
+  const { vcsType, organisation, name } = repository;
+
+  return `https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}/build?circle-token=${token}`;
+}
+
+function prepareRequestPayload(
+  formDataType: FormDataType,
+  activeParametersGroup: ActiveParametersGroupType
+) {
+  const { tag, branch, revision } = formDataType;
+
+  if (activeParametersGroup === "REVISION-BRANCH") {
+    return {
+      branch: branch || undefined,
+      revision: revision || undefined
+    };
+  }
+
+  return { tag };
 }
 
 const styles = (theme: Theme) =>
@@ -164,13 +199,6 @@ const styles = (theme: Theme) =>
     }
   });
 
-interface RepositoryType {
-  id: string;
-  name: string;
-  organisation: string;
-  vcsType: string;
-}
-
 interface Props extends WithStyles<typeof styles> {
   expanded: boolean;
   token: string;
@@ -178,10 +206,7 @@ interface Props extends WithStyles<typeof styles> {
   onToggle: (id: PropType<RepositoryType, "id">) => any;
 }
 
-interface State {
-  tag: string;
-  branch: string;
-  revision: string;
+interface State extends FormDataType {
   tagError?: string;
   branchRevisionError?: string;
   error?: string;
@@ -197,19 +222,15 @@ class Repository extends Component<Props, State> {
   triggerButtonRef = createRef<HTMLButtonElement>();
   cancelRequest?: () => void = undefined;
 
-  constructor(props: Props) {
-    super(props);
-
-    this.state = {
-      activeParametersGroup: "REVISION-BRANCH",
-      tag: "",
-      branch: "",
-      revision: "",
-      pending: false,
-      clipboardPopoverVisible: false,
-      triggerPopoverVisible: false
-    };
-  }
+  state: State = {
+    activeParametersGroup: "REVISION-BRANCH",
+    tag: "",
+    branch: "",
+    revision: "",
+    pending: false,
+    clipboardPopoverVisible: false,
+    triggerPopoverVisible: false
+  };
 
   componentWillUnmount() {
     if (this.cancelRequest) {
@@ -226,14 +247,7 @@ class Repository extends Component<Props, State> {
         null,
         repository,
         token,
-        activeParametersGroup === "REVISION-BRANCH"
-          ? {
-              branch: branch || undefined,
-              revision: revision || undefined
-            }
-          : {
-              tag
-            }
+        prepareRequestPayload({ tag, branch, revision }, activeParametersGroup)
       )
     );
 
@@ -273,7 +287,11 @@ class Repository extends Component<Props, State> {
       return;
     }
 
-    if (activeParametersGroup === "REVISION-BRANCH" && branch.trim().length === 0 && revision.trim().length === 0) {
+    if (
+      activeParametersGroup === "REVISION-BRANCH" &&
+      branch.trim().length === 0 &&
+      revision.trim().length === 0
+    ) {
       this.setState({
         branchRevisionError: "Branch and/or revision is required"
       });
@@ -289,7 +307,10 @@ class Repository extends Component<Props, State> {
   };
 
   onParametersSetChose = (e: ChangeEvent<HTMLInputElement>) => {
-    this.setParametersSet(e.currentTarget.value as PropType<State, "activeParametersGroup">);
+    this.setParametersSet(e.currentTarget.value as PropType<
+      State,
+      "activeParametersGroup"
+    >);
   };
 
   handleInputChange(inputName: "revision" | "tag" | "branch") {
@@ -314,20 +335,24 @@ class Repository extends Component<Props, State> {
     };
   }
 
-  setParametersSet = (parametersSet: PropType<State, "activeParametersGroup">) => {
+  setParametersSet = (
+    parametersSet: PropType<State, "activeParametersGroup">
+  ) => {
     this.setState({
       activeParametersGroup: parametersSet
     });
   };
 
-  prepareCurl() {
-    const {
-      repository: { name, vcsType, organisation },
-      token
-    } = this.props;
-    const { branch } = this.state;
+  onCopyCurl() {
+    const { repository, token } = this.props;
+    const { branch, tag, revision, activeParametersGroup } = this.state;
 
-    return `curl -X POST 'https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}/build?circle-token=${token}' -F branch=${branch}`;
+    return `curl -X POST ${prepareRequestUrl(
+      repository,
+      token
+    )} -H "Content-Type: application/json" -d '${JSON.stringify(
+      prepareRequestPayload({ branch, tag, revision }, activeParametersGroup)
+    )}'`;
   }
 
   copyCurlToClipboard = () => {
@@ -373,12 +398,18 @@ class Repository extends Component<Props, State> {
       <ExpansionPanel expanded={expanded} onChange={() => onToggle(id)}>
         <ExpansionPanelSummary expandIcon={<ExpandMoreIcon />}>
           <Typography className={classes.heading}>{name}</Typography>
-          <Typography className={classes.secondaryHeading}>{organisation}</Typography>
+          <Typography className={classes.secondaryHeading}>
+            {organisation}
+          </Typography>
         </ExpansionPanelSummary>
         <ExpansionPanelDetails className={classes.panelDetails}>
           <Grid container>
             <Grid item sm={8}>
-              <Typography variant="body1" gutterBottom className={classes.description}>
+              <Typography
+                variant="body1"
+                gutterBottom
+                className={classes.description}
+              >
                 To trigger workflow, you need to define revision, branch or tag.
                 <br />
                 Tag can't be used together with revision or branch.
@@ -389,14 +420,18 @@ class Repository extends Component<Props, State> {
               <Box display="flex" alignItems="flex-end" flexDirection="column">
                 <Link
                   className={classes.resourceLink}
-                  href={`https://${vcsType ? "github.com" : "bitbucket.org"}/${organisation}/${name}`}
+                  href={`https://${
+                    vcsType ? "github.com" : "bitbucket.org"
+                  }/${organisation}/${name}`}
                   target="_blank"
                 >
                   Go to repository <OpenInNewIcon fontSize="inherit" />
                 </Link>
                 <Link
                   className={classes.resourceLink}
-                  href={`https://circleci.com/${vcsType ? "gh" : "bb"}/${organisation}/${name}`}
+                  href={`https://circleci.com/${
+                    vcsType ? "gh" : "bb"
+                  }/${organisation}/${name}`}
                   target="_blank"
                 >
                   Go to CircleCI project <OpenInNewIcon fontSize="inherit" />
@@ -450,7 +485,9 @@ class Repository extends Component<Props, State> {
                   disabled={pending}
                   value={revision}
                 />
-                <FormHelperText error={true}>{branchRevisionError}</FormHelperText>
+                <FormHelperText error={true}>
+                  {branchRevisionError}
+                </FormHelperText>
               </Grid>
               <Grid item xs={2} className={classes.dividerWrapper}>
                 <div className={classes.divider}></div>
@@ -493,7 +530,12 @@ class Repository extends Component<Props, State> {
             <div className={classes.actions}>
               <Grid container justify="center">
                 <Grid item xs={4}>
-                  <Box display="flex" justifyContent="center" flexDirection="column" alignItems="center">
+                  <Box
+                    display="flex"
+                    justifyContent="center"
+                    flexDirection="column"
+                    alignItems="center"
+                  >
                     <Popover
                       open={triggerPopoverVisible}
                       anchorEl={this.triggerButtonRef.current}
@@ -513,7 +555,9 @@ class Repository extends Component<Props, State> {
                           dangerouslySetInnerHTML={{ __html: error || "" }}
                         ></Typography>
                       ) : (
-                        <Typography className={`${classes.popover} ${classes.popoverSuccess}`}>
+                        <Typography
+                          className={`${classes.popover} ${classes.popoverSuccess}`}
+                        >
                           Workflow triggered!
                         </Typography>
                       )}
@@ -542,7 +586,9 @@ class Repository extends Component<Props, State> {
                         horizontal: "center"
                       }}
                     >
-                      <Typography className={classes.popover}>cURL copied to clipboard</Typography>
+                      <Typography className={classes.popover}>
+                        cURL copied to clipboard
+                      </Typography>
                     </Popover>
                     <Button
                       size="small"
@@ -558,7 +604,7 @@ class Repository extends Component<Props, State> {
                     <input
                       placeholder="curl"
                       className={classes.curlInput}
-                      value={this.prepareCurl()}
+                      value={this.onCopyCurl()}
                       ref={this.curlInputRef}
                       tabIndex={-1}
                       readOnly

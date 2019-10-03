@@ -30,17 +30,8 @@ const styles = (theme: Theme) =>
         backgroundColor: theme.palette.common.white
       }
     },
-    root: {
-      display: "flex",
-      flexDirection: "column",
-      minHeight: "100vh"
-    },
     spinner: {
       alignSelf: "center"
-    },
-    footer: {
-      padding: theme.spacing(2),
-      marginTop: "auto"
     },
     main: {
       flex: "1 1"
@@ -57,7 +48,7 @@ const styles = (theme: Theme) =>
       alignItems: "stretch"
     },
     form: {
-      width: "100%", // Fix IE 11 issue.
+      width: "100%",
       marginTop: theme.spacing(1)
     },
     submit: {
@@ -190,7 +181,8 @@ class App extends Component<Props, State> {
     }
 
     this.setState({
-      token
+      token,
+      page: "REPOSITORIES"
     });
 
     this.fetchRepositories(token);
@@ -205,7 +197,8 @@ class App extends Component<Props, State> {
   onLogout = () => {
     this.setState({
       repositories: undefined,
-      token: undefined
+      token: undefined,
+      page: "LOGIN"
     });
 
     localStorage.removeItem("circleci-token");
@@ -262,12 +255,19 @@ class App extends Component<Props, State> {
           aria-describedby="client-snackbar"
           message={
             <span id="client-snackbar" className={classes.errorMessage}>
-              <InfoIcon className={`${classes.errorPopupIcon} ${classes.errorPopupIconVariant}`} />
+              <InfoIcon
+                className={`${classes.errorPopupIcon} ${classes.errorPopupIconVariant}`}
+              />
               {this.state.error}
             </span>
           }
           action={[
-            <IconButton key="close" aria-label="close" color="inherit" onClick={this.onErrorClose}>
+            <IconButton
+              key="close"
+              aria-label="close"
+              color="inherit"
+              onClick={this.onErrorClose}
+            >
               <CloseIcon className={classes.errorPopupIcon} />
             </IconButton>
           ]}
@@ -288,10 +288,16 @@ class App extends Component<Props, State> {
 
   render() {
     const { classes } = this.props;
-    const { repositories, token, rememberMe, fetchingRepositories, page } = this.state;
+    const {
+      repositories,
+      token,
+      rememberMe,
+      fetchingRepositories,
+      page
+    } = this.state;
 
     return (
-      <div className={classes.root}>
+      <div>
         <Container component="main" maxWidth="md" className={classes.main}>
           <CssBaseline />
           <div className={classes.paper}>
@@ -314,19 +320,38 @@ class App extends Component<Props, State> {
                       autoFocus
                       autoComplete="off"
                     />
-                    <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Box
+                      display="flex"
+                      justifyContent="space-between"
+                      alignItems="center"
+                    >
                       <FormGroup>
                         <FormControlLabel
                           className={classes.rememberMe}
-                          control={<Switch size="small" checked={rememberMe} onChange={this.toggleRememberMe} />}
+                          control={
+                            <Switch
+                              size="small"
+                              checked={rememberMe}
+                              onChange={this.toggleRememberMe}
+                            />
+                          }
                           label="Keep token in browser"
                         />
                       </FormGroup>
-                      <Link href="https://circleci.com/account/api" target="_blank">
+                      <Link
+                        href="https://circleci.com/account/api"
+                        target="_blank"
+                      >
                         Get token <OpenInNewIcon fontSize="inherit" />
                       </Link>
                     </Box>
-                    <Button type="submit" fullWidth variant="contained" color="primary" className={classes.submit}>
+                    <Button
+                      type="submit"
+                      fullWidth
+                      variant="contained"
+                      color="primary"
+                      className={classes.submit}
+                    >
                       Fetch projects
                     </Button>
                   </form>
@@ -336,24 +361,14 @@ class App extends Component<Props, State> {
             {page === "REPOSITORIES"
               ? fetchingRepositories
                 ? this.renderLoader()
-                : repositories !== undefined && <Repositories token={token!} repositories={repositories} />
+                : repositories !== undefined && (
+                    <Repositories token={token!} repositories={repositories} />
+                  )
               : null}
             {page === "ABOUT" ? this.renderAbout() : null}
           </div>
         </Container>
         {this.renderError()}
-        <footer className={classes.footer}>
-          <Container maxWidth="sm">
-            <Typography variant="body1">
-              <a href="#" onClick={this.showAbout}>
-                about
-              </a>
-              <a href="https://twitter.com/MariuszPilarczy" target="_new">
-                author
-              </a>
-            </Typography>
-          </Container>
-        </footer>
       </div>
     );
   }
