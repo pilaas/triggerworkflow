@@ -72,9 +72,15 @@ const styles = (theme: Theme) =>
       display: "flex",
       alignItems: "center"
     },
-    logoutButton: {
+    options: {
       position: "absolute",
+      display: "flex",
+      left: "100%",
+      top: 0,
       marginLeft: "20px"
+    },
+    logoutButton: {
+      marginLeft: theme.spacing(1)
     }
   });
 
@@ -91,6 +97,7 @@ interface State {
   error?: string;
   showError: boolean;
   rememberMe: boolean;
+  aboutVisible: boolean;
   token?: string;
   fetchingRepositories: boolean;
 }
@@ -110,6 +117,7 @@ class App extends Component<Props, State> {
       repositories: undefined,
       token: token === null ? undefined : token,
       rememberMe: false,
+      aboutVisible: false,
       fetchingRepositories: false,
       showError: false
     };
@@ -224,6 +232,19 @@ class App extends Component<Props, State> {
     );
   }
 
+  renderAboutButton() {
+    return (
+      <Button
+        variant="contained"
+        color="primary"
+        size="small"
+        onClick={this.toggleAboutVisibility}
+      >
+        about
+      </Button>
+    );
+  }
+
   onErrorClose = () => {
     this.setState({
       showError: false
@@ -276,8 +297,19 @@ class App extends Component<Props, State> {
     );
   }
 
+  toggleAboutVisibility = () => {
+    this.setState(({ aboutVisible }) => ({
+      aboutVisible: !aboutVisible
+    }));
+  };
+
   renderAbout() {
-    return <About />;
+    return (
+      <About
+        open={this.state.aboutVisible}
+        onClose={this.toggleAboutVisibility}
+      />
+    );
   }
 
   showAbout = () => {
@@ -303,7 +335,10 @@ class App extends Component<Props, State> {
           <div className={classes.paper}>
             <Typography component="h1" variant="h5" className={classes.header}>
               Trigger workflow
-              {page === "REPOSITORIES" && this.renderLogout()}
+              <div className={classes.options}>
+                {this.renderAboutButton()}
+                {page === "REPOSITORIES" && this.renderLogout()}
+              </div>
             </Typography>
             {page === "LOGIN" ? (
               <Grid container justify="center">
@@ -365,9 +400,9 @@ class App extends Component<Props, State> {
                     <Repositories token={token!} repositories={repositories} />
                   )
               : null}
-            {page === "ABOUT" ? this.renderAbout() : null}
           </div>
         </Container>
+        {this.renderAbout()}
         {this.renderError()}
       </div>
     );
