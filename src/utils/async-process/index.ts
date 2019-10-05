@@ -1,13 +1,13 @@
 export const CANCELLED = Symbol("cancelled");
 
-function asyncProcess(generator: Function): [Promise<any>, () => void] {
+function asyncProcess<T = any>(generator: Function): [Promise<T>, () => void] {
   let cancelled = false;
 
   function cancel() {
     cancelled = true;
   }
 
-  const promise = new Promise(async (resolve, reject) => {
+  const promise = new Promise<T>(async (resolve, reject) => {
     try {
       const iterator = generator();
       let result;

@@ -21,43 +21,44 @@ import CloseIcon from "@material-ui/icons/Close";
 import Container from "@material-ui/core/Container";
 
 import Repositories from "./Repositories";
+import asyncProcess from "./utils/async-process";
 import About from "./About";
+import { fetchRepositories, RepositoriesResponseType } from "./api";
 
 const styles = (theme: Theme) =>
   createStyles({
     "@global": {
       body: {
-        backgroundColor: theme.palette.common.white
+        backgroundColor: "#F3F3F3"
       }
     },
     spinner: {
-      alignSelf: "center"
+      margin: "0 auto",
+      display: "block"
     },
-    main: {
-      flex: "1 1"
-    },
-    header: {
-      marginBottom: theme.spacing(6),
-      position: "relative",
-      alignSelf: "center"
-    },
-    paper: {
+    app: {
       marginTop: theme.spacing(4),
       display: "flex",
       flexDirection: "column",
       alignItems: "stretch"
     },
+    header: {
+      marginBottom: theme.spacing(6),
+      position: "relative",
+      alignSelf: "center",
+      [theme.breakpoints.down("xs")]: {
+        alignSelf: "flex-start"
+      }
+    },
     form: {
       width: "100%",
       marginTop: theme.spacing(1)
-    },
-    submit: {
-      margin: theme.spacing(3, 0, 2)
     },
     rememberMe: {
       marginLeft: 0,
       marginRight: 0
     },
+    rememberMeLabel: theme.typography.body2,
     errorPopup: {
       backgroundColor: theme.palette.error.dark
     },
@@ -73,11 +74,22 @@ const styles = (theme: Theme) =>
       alignItems: "center"
     },
     options: {
-      position: "absolute",
-      display: "flex",
-      left: "100%",
-      top: 0,
-      marginLeft: "20px"
+      marginTop: theme.spacing(2),
+      [theme.breakpoints.up("sm")]: {
+        position: "absolute",
+        display: "flex",
+        left: "100%",
+        top: 0,
+        bottom: 0,
+        marginLeft: theme.spacing(2),
+        marginTop: 0
+      },
+      "& button": {
+        alignSelf: "center"
+      }
+    },
+    submitButton: {
+      margin: theme.spacing(3, 0, 2)
     },
     logoutButton: {
       marginLeft: theme.spacing(1)
@@ -93,20 +105,18 @@ interface State {
     organisation: string;
     vcsType: string;
   }[];
-  page: "LOGIN" | "REPOSITORIES" | "ABOUT";
-  error?: string;
-  showError: boolean;
-  rememberMe: boolean;
-  aboutVisible: boolean;
   token?: string;
+  page: "LOGIN" | "REPOSITORIES";
+  error?: string;
+  aboutVisible: boolean;
+  errorVisible: boolean;
+  rememberMe: boolean;
   fetchingRepositories: boolean;
 }
 
-interface FormElements extends HTMLFormControlsCollection {
-  token: HTMLInputElement;
-}
-
 class App extends Component<Props, State> {
+  cancelRequest?: () => void;
+
   constructor(props: Props) {
     super(props);
 
@@ -119,7 +129,7 @@ class App extends Component<Props, State> {
       rememberMe: false,
       aboutVisible: false,
       fetchingRepositories: false,
-      showError: false
+      errorVisible: false
     };
   }
 
@@ -127,7 +137,7 @@ class App extends Component<Props, State> {
     const { token } = this.state;
 
     if (token) {
-      this.fetchRepositories(token as string);
+      this.fetchRepositories(token);
     }
   }
 
@@ -136,41 +146,33 @@ class App extends Component<Props, State> {
       fetchingRepositories: true
     });
 
-    fetch(`https://circleci.com/api/v1.1/projects?circle-token=${token}`)
-      .then(async response => {
-        if (response.status === 401) {
+    const [promise, cancel] = asyncProcess<RepositoriesResponseType>(fetchRepositories.bind(null, token));
+
+    this.cancelRequest = cancel;
+
+    promise
+      .then(
+        data => {
           this.setState({
-            error: "Incorrect access token",
-            showError: true,
-            token: undefined
-          });
-
-          return;
-        }
-
-        const data = await response.json();
-
-        this.setState({
-          repositories: data.map(
-            ({
-              vcs_url,
-              vcs_type,
-              reponame,
-              username
-            }: {
-              vcs_url: string;
-              vcs_type: string;
-              reponame: string;
-              username: string;
-            }) => ({
+            repositories: data.map(({ vcs_url, vcs_type, reponame, username }) => ({
               id: vcs_url,
               vcsType: vcs_type,
               name: reponame,
               organisation: username
-            })
-          )
-        });
-      })
+            }))
+          });
+        },
+        () => {
+          this.setState({
+            error: "Incorrect access token",
+            errorVisible: true,
+            token: undefined,
+            page: "LOGIN"
+          });
+
+          localStorage.removeItem("circleci-token");
+        }
+      )
       .finally(() => {
         this.setState({
           fetchingRepositories: false
@@ -178,10 +180,23 @@ class App extends Component<Props, State> {
       });
   }
 
+  toggleRememberMe = () => {
+    this.setState(({ rememberMe }) => ({
+      rememberMe: !rememberMe
+    }));
+  };
+
+  toggleAboutVisibility = () => {
+    this.setState(({ aboutVisible }) => ({
+      aboutVisible: !aboutVisible
+    }));
+  };
+
   onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+
     const { rememberMe } = this.state;
-    const elements: FormElements = e.currentTarget.elements as FormElements;
+    const elements = e.currentTarget.elements as (HTMLFormControlsCollection & { token: HTMLInputElement });
     const token = elements.token.value;
 
     if (rememberMe) {
@@ -196,10 +211,16 @@ class App extends Component<Props, State> {
     this.fetchRepositories(token);
   };
 
-  toggleRememberMe = () => {
-    this.setState(({ rememberMe }) => ({
-      rememberMe: !rememberMe
-    }));
+  onErrorClose = () => {
+    this.setState({
+      errorVisible: false
+    });
+  };
+
+  onErrorClosed = () => {
+    this.setState({
+      error: undefined
+    });
   };
 
   onLogout = () => {
@@ -212,11 +233,40 @@ class App extends Component<Props, State> {
     localStorage.removeItem("circleci-token");
   };
 
-  renderLoader() {
-    return <CircularProgress className={this.props.classes.spinner} />;
+  renderError() {
+    const { classes } = this.props;
+
+    return (
+      <Snackbar
+        anchorOrigin={{
+          vertical: "top",
+          horizontal: "center"
+        }}
+        open={this.state.errorVisible}
+        autoHideDuration={6000}
+        onClose={this.onErrorClose}
+        onExited={this.onErrorClosed}
+      >
+        <SnackbarContent
+          className={classes.errorPopup}
+          aria-describedby="client-snackbar"
+          message={
+            <span id="client-snackbar" className={classes.errorMessage}>
+              <InfoIcon className={`${classes.errorPopupIcon} ${classes.errorPopupIconVariant}`} />
+              {this.state.error}
+            </span>
+          }
+          action={[
+            <IconButton key="close" aria-label="close" color="inherit" onClick={this.onErrorClose}>
+              <CloseIcon className={classes.errorPopupIcon} />
+            </IconButton>
+          ]}
+        />
+      </Snackbar>
+    );
   }
 
-  renderLogout() {
+  renderLogoutButton() {
     const { classes } = this.props;
 
     return (
@@ -232,174 +282,96 @@ class App extends Component<Props, State> {
     );
   }
 
+  renderLoader() {
+    const { classes } = this.props;
+
+    return <CircularProgress className={classes.spinner} />;
+  }
+
   renderAboutButton() {
     return (
-      <Button
-        variant="contained"
-        color="primary"
-        size="small"
-        onClick={this.toggleAboutVisibility}
-      >
+      <Button variant="contained" color="primary" size="small" onClick={this.toggleAboutVisibility}>
         about
       </Button>
     );
   }
 
-  onErrorClose = () => {
-    this.setState({
-      showError: false
-    });
-  };
-
-  onErrorClosed = () => {
-    this.setState({
-      error: undefined
-    });
-  };
-
-  renderError() {
-    const { classes } = this.props;
-
-    return (
-      <Snackbar
-        anchorOrigin={{
-          vertical: "top",
-          horizontal: "center"
-        }}
-        open={this.state.showError}
-        autoHideDuration={6000}
-        onClose={this.onErrorClose}
-        onExited={this.onErrorClosed}
-      >
-        <SnackbarContent
-          className={classes.errorPopup}
-          aria-describedby="client-snackbar"
-          message={
-            <span id="client-snackbar" className={classes.errorMessage}>
-              <InfoIcon
-                className={`${classes.errorPopupIcon} ${classes.errorPopupIconVariant}`}
-              />
-              {this.state.error}
-            </span>
-          }
-          action={[
-            <IconButton
-              key="close"
-              aria-label="close"
-              color="inherit"
-              onClick={this.onErrorClose}
-            >
-              <CloseIcon className={classes.errorPopupIcon} />
-            </IconButton>
-          ]}
-        />
-      </Snackbar>
-    );
-  }
-
-  toggleAboutVisibility = () => {
-    this.setState(({ aboutVisible }) => ({
-      aboutVisible: !aboutVisible
-    }));
-  };
-
   renderAbout() {
-    return (
-      <About
-        open={this.state.aboutVisible}
-        onClose={this.toggleAboutVisibility}
-      />
-    );
+    return <About open={this.state.aboutVisible} onClose={this.toggleAboutVisibility} />;
   }
 
-  showAbout = () => {
-    this.setState({
-      page: "ABOUT"
-    });
-  };
+  renderPage() {
+    const { classes } = this.props;
+    const { page, fetchingRepositories, repositories, rememberMe, token } = this.state;
+
+    if (page === "LOGIN") {
+      return (
+        <Grid container justify="center">
+          <Grid item sm={6} xs={12}>
+            <form onSubmit={this.onSubmit}>
+              <TextField
+                variant="outlined"
+                margin="normal"
+                required
+                fullWidth
+                id="token"
+                label="CircleCI token"
+                name="token"
+                autoFocus
+                autoComplete="off"
+              />
+              <Box display="flex" justifyContent="space-between" alignItems="center">
+                <FormGroup>
+                  <FormControlLabel
+                    className={classes.rememberMe}
+                    control={<Switch size="small" checked={rememberMe} onChange={this.toggleRememberMe} />}
+                    label="keep token in browser"
+                    classes={{ label: classes.rememberMeLabel }}
+                  />
+                </FormGroup>
+                <Link href="https://circleci.com/account/api" target="_blank">
+                  get token <OpenInNewIcon fontSize="inherit" />
+                </Link>
+              </Box>
+              <Button type="submit" fullWidth variant="contained" color="primary" className={classes.submitButton}>
+                Fetch projects
+              </Button>
+            </form>
+          </Grid>
+        </Grid>
+      );
+    }
+
+    if (page === "REPOSITORIES") {
+      if (fetchingRepositories) {
+        return this.renderLoader();
+      }
+
+      if (repositories !== undefined) {
+        return <Repositories token={token!} repositories={repositories} />;
+      }
+    }
+  }
 
   render() {
     const { classes } = this.props;
-    const {
-      repositories,
-      token,
-      rememberMe,
-      fetchingRepositories,
-      page
-    } = this.state;
+    const { page } = this.state;
 
     return (
       <div>
-        <Container component="main" maxWidth="md" className={classes.main}>
+        <Container maxWidth="md">
           <CssBaseline />
-          <div className={classes.paper}>
-            <Typography component="h1" variant="h5" className={classes.header}>
-              Trigger workflow
+          <div className={classes.app}>
+            <header className={classes.header}>
+              <Typography component="h1" variant="h4">
+                Trigger workflow
+              </Typography>
               <div className={classes.options}>
                 {this.renderAboutButton()}
-                {page === "REPOSITORIES" && this.renderLogout()}
+                {page === "REPOSITORIES" && this.renderLogoutButton()}
               </div>
-            </Typography>
-            {page === "LOGIN" ? (
-              <Grid container justify="center">
-                <Grid item sm={6}>
-                  <form className={classes.form} onSubmit={this.onSubmit}>
-                    <TextField
-                      variant="outlined"
-                      margin="normal"
-                      required
-                      fullWidth
-                      id="token"
-                      label="CircleCI token"
-                      name="token"
-                      autoFocus
-                      autoComplete="off"
-                    />
-                    <Box
-                      display="flex"
-                      justifyContent="space-between"
-                      alignItems="center"
-                    >
-                      <FormGroup>
-                        <FormControlLabel
-                          className={classes.rememberMe}
-                          control={
-                            <Switch
-                              size="small"
-                              checked={rememberMe}
-                              onChange={this.toggleRememberMe}
-                            />
-                          }
-                          label="Keep token in browser"
-                        />
-                      </FormGroup>
-                      <Link
-                        href="https://circleci.com/account/api"
-                        target="_blank"
-                      >
-                        Get token <OpenInNewIcon fontSize="inherit" />
-                      </Link>
-                    </Box>
-                    <Button
-                      type="submit"
-                      fullWidth
-                      variant="contained"
-                      color="primary"
-                      className={classes.submit}
-                    >
-                      Fetch projects
-                    </Button>
-                  </form>
-                </Grid>
-              </Grid>
-            ) : null}
-            {page === "REPOSITORIES"
-              ? fetchingRepositories
-                ? this.renderLoader()
-                : repositories !== undefined && (
-                    <Repositories token={token!} repositories={repositories} />
-                  )
-              : null}
+            </header>
+            <main>{this.renderPage()}</main>
           </div>
         </Container>
         {this.renderAbout()}

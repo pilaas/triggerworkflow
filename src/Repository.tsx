@@ -20,17 +20,13 @@ import ExpansionPanelDetails from "@material-ui/core/ExpansionPanelDetails";
 import ExpansionPanelSummary from "@material-ui/core/ExpansionPanelSummary";
 
 import asyncProcess from "./utils/async-process";
+import prepareRequestUrl from "./utils/prepareRequestUrl";
+import { triggerWorkflow } from "./api";
+import { RepositoryType } from "./types";
 
 type PropType<TObj, TProp extends keyof TObj> = TObj[TProp];
 
 type ActiveParametersGroupType = "REVISION-BRANCH" | "TAG";
-
-type RepositoryType = {
-  id: string;
-  name: string;
-  organisation: string;
-  vcsType: string;
-};
 
 type FormDataType = {
   tag: string;
@@ -38,41 +34,7 @@ type FormDataType = {
   revision: string;
 };
 
-function* triggerWorkflow(
-  repository: RepositoryType,
-  token: string,
-  data: object
-) {
-  const response = yield fetch(
-    process.env.REACT_APP_PROXY_URL + prepareRequestUrl(repository, token),
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(data)
-    }
-  );
-
-  if (response.ok) {
-    return true;
-  }
-
-  const body = yield response.json();
-
-  throw new Error(body.message);
-}
-
-function prepareRequestUrl(repository: RepositoryType, token: string) {
-  const { vcsType, organisation, name } = repository;
-
-  return `https://circleci.com/api/v1.1/project/${vcsType}/${organisation}/${name}/build?circle-token=${token}`;
-}
-
-function prepareRequestPayload(
-  formDataType: FormDataType,
-  activeParametersGroup: ActiveParametersGroupType
-) {
+function prepareRequestPayload(formDataType: FormDataType, activeParametersGroup: ActiveParametersGroupType) {
   const { tag, branch, revision } = formDataType;
 
   if (activeParametersGroup === "REVISION-BRANCH") {
@@ -99,34 +61,8 @@ const styles = (theme: Theme) =>
     panelDetails: {
       flexDirection: "column"
     },
-    triggerButtonWrapper: {
-      display: "flex",
-      flexDirection: "column",
-      justifyContent: "flex-end"
-    },
     triggerButton: {
       height: "40px"
-    },
-    parametersGroup: {
-      marginBottom: theme.spacing(1),
-      padding: theme.spacing(1),
-      borderRadius: 2,
-      "&:last-child": {
-        marginBottom: 0
-      }
-    },
-    curl: {
-      fontSize: "0.6em",
-      flexGrow: 1,
-      marginRight: theme.spacing(1),
-      "& input": {
-        padding: 0
-      }
-    },
-    curlWrapper: {
-      marginBottom: theme.spacing(1),
-      display: "flex",
-      alignItems: "center"
     },
     curlButton: {
       textTransform: "none",
@@ -145,30 +81,40 @@ const styles = (theme: Theme) =>
       fontSize: 20,
       marginLeft: theme.spacing(1)
     },
-    error: {
-      color: theme.palette.error.dark,
-      border: `1px solid ${theme.palette.error.dark}`,
-      borderRadius: 2,
-      padding: 4
+    introduction: {
+      marginBottom: theme.spacing(3)
     },
-    iconSmall: {
-      fontSize: 20
+    form: {
+      alignItems: "stretch",
+      flexDirection: "column",
+      [theme.breakpoints.up("sm")]: {
+        flexDirection: "row"
+      }
     },
     description: {
-      marginBottom: theme.spacing(4)
+      fontSize: theme.typography.pxToRem(13)
     },
     dividerWrapper: {
       display: "flex",
-      flexDirection: "column",
       alignItems: "center",
-      color: theme.palette.grey[400]
+      color: theme.palette.grey[400],
+      [theme.breakpoints.up("sm")]: {
+        textAlign: "right",
+        flexDirection: "column"
+      }
     },
     divider: {
-      width: "1px",
+      height: "1px",
+      marginLeft: theme.spacing(2),
+      marginRight: theme.spacing(2),
       flexGrow: 1,
       background: theme.palette.grey[300],
-      marginTop: theme.spacing(2),
-      marginBottom: theme.spacing(2)
+      [theme.breakpoints.up("sm")]: {
+        height: "auto",
+        width: "1px",
+        marginTop: theme.spacing(2),
+        marginBottom: theme.spacing(2)
+      }
     },
     actions: {
       marginTop: theme.spacing(4),
@@ -176,12 +122,15 @@ const styles = (theme: Theme) =>
       flexDirection: "column",
       alignItems: "center"
     },
-    resourceLink: {
+    externalLinks: {
+      textAlign: "left",
+      [theme.breakpoints.up("sm")]: {
+        textAlign: "right"
+      }
+    },
+    externalLink: {
       marginBottom: theme.spacing(1),
       fontSize: 12
-    },
-    buttonWrapper: {
-      position: "relative"
     },
     popover: {
       padding: theme.spacing(1)
@@ -269,6 +218,35 @@ class Repository extends Component<Props, State> {
       });
   }
 
+  setParametersSet = (parametersSet: PropType<State, "activeParametersGroup">) => {
+    this.setState({
+      activeParametersGroup: parametersSet
+    });
+  };
+
+  generateCurl() {
+    const { repository, token } = this.props;
+    const { branch, tag, revision, activeParametersGroup } = this.state;
+
+    return `curl -X POST ${prepareRequestUrl(
+      repository,
+      token
+    )} -H "Content-Type: application/json" -d '${JSON.stringify(
+      prepareRequestPayload({ branch, tag, revision }, activeParametersGroup)
+    )}'`;
+  }
+
+  onCopyCurl = () => {
+    if (this.curlInputRef.current) {
+      this.curlInputRef.current.select();
+      document.execCommand("copy");
+
+      this.setState({
+        clipboardPopoverVisible: true
+      });
+    }
+  };
+
   onTriggerWorkflow = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const { tag, branch, revision, activeParametersGroup } = this.state;
@@ -287,11 +265,7 @@ class Repository extends Component<Props, State> {
       return;
     }
 
-    if (
-      activeParametersGroup === "REVISION-BRANCH" &&
-      branch.trim().length === 0 &&
-      revision.trim().length === 0
-    ) {
+    if (activeParametersGroup === "REVISION-BRANCH" && branch.trim().length === 0 && revision.trim().length === 0) {
       this.setState({
         branchRevisionError: "Branch and/or revision is required"
       });
@@ -307,13 +281,10 @@ class Repository extends Component<Props, State> {
   };
 
   onParametersSetChose = (e: ChangeEvent<HTMLInputElement>) => {
-    this.setParametersSet(e.currentTarget.value as PropType<
-      State,
-      "activeParametersGroup"
-    >);
+    this.setParametersSet(e.currentTarget.value as PropType<State, "activeParametersGroup">);
   };
 
-  handleInputChange(inputName: "revision" | "tag" | "branch") {
+  onInputChange(inputName: "revision" | "tag" | "branch") {
     return (e: ChangeEvent<HTMLInputElement>) => {
       if (inputName === "revision") {
         this.setState({
@@ -334,37 +305,6 @@ class Repository extends Component<Props, State> {
       }
     };
   }
-
-  setParametersSet = (
-    parametersSet: PropType<State, "activeParametersGroup">
-  ) => {
-    this.setState({
-      activeParametersGroup: parametersSet
-    });
-  };
-
-  onCopyCurl() {
-    const { repository, token } = this.props;
-    const { branch, tag, revision, activeParametersGroup } = this.state;
-
-    return `curl -X POST ${prepareRequestUrl(
-      repository,
-      token
-    )} -H "Content-Type: application/json" -d '${JSON.stringify(
-      prepareRequestPayload({ branch, tag, revision }, activeParametersGroup)
-    )}'`;
-  }
-
-  copyCurlToClipboard = () => {
-    if (this.curlInputRef.current) {
-      this.curlInputRef.current.select();
-      document.execCommand("copy");
-
-      this.setState({
-        clipboardPopoverVisible: true
-      });
-    }
-  };
 
   onClipboardPopoverClose = () => {
     this.setState({
@@ -398,50 +338,39 @@ class Repository extends Component<Props, State> {
       <ExpansionPanel expanded={expanded} onChange={() => onToggle(id)}>
         <ExpansionPanelSummary expandIcon={<ExpandMoreIcon />}>
           <Typography className={classes.heading}>{name}</Typography>
-          <Typography className={classes.secondaryHeading}>
-            {organisation}
-          </Typography>
+          <Typography className={classes.secondaryHeading}>{organisation}</Typography>
         </ExpansionPanelSummary>
         <ExpansionPanelDetails className={classes.panelDetails}>
-          <Grid container>
+          <Grid container className={classes.introduction}>
             <Grid item sm={8}>
-              <Typography
-                variant="body1"
-                gutterBottom
-                className={classes.description}
-              >
+              <Typography variant="body1" gutterBottom className={classes.description}>
                 To trigger workflow, you need to define revision, branch or tag.
                 <br />
                 Tag can't be used together with revision or branch.
                 <br />
               </Typography>
             </Grid>
-            <Grid item sm={4}>
-              <Box display="flex" alignItems="flex-end" flexDirection="column">
-                <Link
-                  className={classes.resourceLink}
-                  href={`https://${
-                    vcsType ? "github.com" : "bitbucket.org"
-                  }/${organisation}/${name}`}
-                  target="_blank"
-                >
-                  Go to repository <OpenInNewIcon fontSize="inherit" />
-                </Link>
-                <Link
-                  className={classes.resourceLink}
-                  href={`https://circleci.com/${
-                    vcsType ? "gh" : "bb"
-                  }/${organisation}/${name}`}
-                  target="_blank"
-                >
-                  Go to CircleCI project <OpenInNewIcon fontSize="inherit" />
-                </Link>
-              </Box>
+            <Grid item sm={4} className={classes.externalLinks}>
+              <Link
+                className={classes.externalLink}
+                href={`https://${vcsType ? "github.com" : "bitbucket.org"}/${organisation}/${name}`}
+                target="_blank"
+              >
+                Go to repository <OpenInNewIcon fontSize="inherit" />
+              </Link>
+              <br />
+              <Link
+                className={classes.externalLink}
+                href={`https://circleci.com/${vcsType ? "gh" : "bb"}/${organisation}/${name}`}
+                target="_blank"
+              >
+                Go to CircleCI project <OpenInNewIcon fontSize="inherit" />
+              </Link>
             </Grid>
           </Grid>
           <form onSubmit={this.onTriggerWorkflow} autoComplete="off">
-            <Grid container spacing={1} justify="space-between">
-              <Grid item xs={5}>
+            <Grid container spacing={1} justify="space-between" className={classes.form}>
+              <Grid item sm={5}>
                 <Box justifyContent="center" display="flex">
                   <FormControlLabel
                     control={
@@ -461,7 +390,7 @@ class Repository extends Component<Props, State> {
                   }}
                   variant="outlined"
                   margin="dense"
-                  onChange={this.handleInputChange("branch")}
+                  onChange={this.onInputChange("branch")}
                   fullWidth
                   id="branch"
                   placeholder="e.g. develop"
@@ -472,7 +401,7 @@ class Repository extends Component<Props, State> {
                 />
                 <TextField
                   variant="outlined"
-                  onChange={this.handleInputChange("revision")}
+                  onChange={this.onInputChange("revision")}
                   margin="dense"
                   InputLabelProps={{
                     shrink: true
@@ -485,16 +414,14 @@ class Repository extends Component<Props, State> {
                   disabled={pending}
                   value={revision}
                 />
-                <FormHelperText error={true}>
-                  {branchRevisionError}
-                </FormHelperText>
+                <FormHelperText error={true}>{branchRevisionError}</FormHelperText>
               </Grid>
-              <Grid item xs={2} className={classes.dividerWrapper}>
+              <Grid item sm={2} className={classes.dividerWrapper}>
                 <div className={classes.divider}></div>
                 <span>or</span>
                 <div className={classes.divider}></div>
               </Grid>
-              <Grid item xs={5}>
+              <Grid item sm={5}>
                 <Box justifyContent="center" display="flex">
                   <FormControlLabel
                     control={
@@ -511,7 +438,7 @@ class Repository extends Component<Props, State> {
                 <TextField
                   variant="outlined"
                   margin="dense"
-                  onChange={this.handleInputChange("tag")}
+                  onChange={this.onInputChange("tag")}
                   fullWidth
                   id="tag"
                   label="tag"
@@ -530,12 +457,7 @@ class Repository extends Component<Props, State> {
             <div className={classes.actions}>
               <Grid container justify="center">
                 <Grid item xs={4}>
-                  <Box
-                    display="flex"
-                    justifyContent="center"
-                    flexDirection="column"
-                    alignItems="center"
-                  >
+                  <Box display="flex" justifyContent="center" flexDirection="column" alignItems="center">
                     <Popover
                       open={triggerPopoverVisible}
                       anchorEl={this.triggerButtonRef.current}
@@ -555,9 +477,7 @@ class Repository extends Component<Props, State> {
                           dangerouslySetInnerHTML={{ __html: error || "" }}
                         ></Typography>
                       ) : (
-                        <Typography
-                          className={`${classes.popover} ${classes.popoverSuccess}`}
-                        >
+                        <Typography className={`${classes.popover} ${classes.popoverSuccess}`}>
                           Workflow triggered!
                         </Typography>
                       )}
@@ -586,9 +506,7 @@ class Repository extends Component<Props, State> {
                         horizontal: "center"
                       }}
                     >
-                      <Typography className={classes.popover}>
-                        cURL copied to clipboard
-                      </Typography>
+                      <Typography className={classes.popover}>cURL copied to clipboard</Typography>
                     </Popover>
                     <Button
                       size="small"
@@ -596,7 +514,7 @@ class Repository extends Component<Props, State> {
                       variant="contained"
                       className={classes.curlButton}
                       ref={this.curlButtonRef}
-                      onClick={this.copyCurlToClipboard}
+                      onClick={this.onCopyCurl}
                     >
                       cURL
                       <SaveAltIcon className={classes.curlIcon} />
@@ -604,7 +522,7 @@ class Repository extends Component<Props, State> {
                     <input
                       placeholder="curl"
                       className={classes.curlInput}
-                      value={this.onCopyCurl()}
+                      value={this.generateCurl()}
                       ref={this.curlInputRef}
                       tabIndex={-1}
                       readOnly

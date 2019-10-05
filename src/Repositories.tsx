@@ -1,18 +1,13 @@
 import React, { Component } from "react";
+import Grid from "@material-ui/core/Grid";
 
 import Repository from "./Repository";
+import { RepositoryType } from "./types";
 
-interface RepositoryType {
-  id: string;
-  name: string;
-  organisation: string;
-  vcsType: string;
-}
-
-interface RepositoriesProps {
+type RepositoriesProps = {
   repositories: RepositoryType[];
   token: string;
-}
+};
 
 interface RepositoriesState {
   expandedRepositoryId: string | undefined;
@@ -34,17 +29,19 @@ class Repositores extends Component<RepositoriesProps, RepositoriesState> {
     const { expandedRepositoryId } = this.state;
 
     return (
-      <>
-        {repositories.map(({ id, name, organisation, vcsType }) => (
-          <Repository
-            key={id}
-            token={token}
-            expanded={expandedRepositoryId === id}
-            repository={{ id, name, organisation, vcsType }}
-            onToggle={this.togglePanel}
-          />
-        ))}
-      </>
+      <Grid container justify="center">
+        <Grid item xs={12} sm={10}>
+          {repositories.map(({ id, name, organisation, vcsType }) => (
+            <Repository
+              key={id}
+              token={token}
+              expanded={expandedRepositoryId === id}
+              repository={{ id, name, organisation, vcsType }}
+              onToggle={this.togglePanel}
+            />
+          ))}
+        </Grid>
+      </Grid>
     );
   }
 }
